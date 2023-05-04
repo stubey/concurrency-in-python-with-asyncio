@@ -45,12 +45,9 @@ CREATE_SKU_TABLE = \
     product_id INT NOT NULL,
     product_size_id INT NOT NULL,
     product_color_id INT NOT NULL,
-    FOREIGN KEY (product_id)
-    REFERENCES product(product_id),
-    FOREIGN KEY (product_size_id)
-    REFERENCES product_size(product_size_id),
-    FOREIGN KEY (product_color_id)
-    REFERENCES product_color(product_color_id)
+    FOREIGN KEY (product_id) REFERENCES product(product_id),
+    FOREIGN KEY (product_size_id) REFERENCES product_size(product_size_id),
+    FOREIGN KEY (product_color_id) REFERENCES product_color(product_color_id)
     );"""
 
 COLOR_INSERT = \
@@ -107,16 +104,72 @@ def load_common_words() -> List[str]:
                 words.append(l.strip())
             return words
 
+def generate_brand_names(words: List[str], id_start: int, id_end: int) -> List[Tuple[Union[str, int]]]:
+    # return [(words[index],) for index in random.sample(range(id_start, id_end+1), count)]
+    brands = []
+    for pkey in range(id_start, id_end+1):
+        brand = words[random.randint(0, 1000)]  # Choose from first 1001 words
+        brands.append((pkey, brand))
+    return brands
 
-def generate_brand_names(words: List[str]) -> List[Tuple[Union[str, ]]]:
-    return [(words[index],) for index in random.sample(range(100), 100)]
+async def insert_brands(connection) -> None:
+    # brand_id SERIAL PRIMARY KEY,
+    # brand_name TEXT NOT NULL    
+    words = load_common_words()    
+    id_start = 1
+    id_end = 100
+    tuples = generate_brand_names(words, id_start, id_end)
+    sql = "INSERT INTO brand VALUES($1, $2)"
+    await connection.executemany(sql, tuples)
 
-async def insert_brands(connection) -> int:
-    common_words = load_common_words()    
-    value_tuples = generate_brand_names(common_words)
-    insert_brands_sql = "INSERT INTO brand VALUES(DEFAULT, $1)"
-    return await connection.executemany(insert_brands_sql, value_tuples)
 
+def generate_products(words: List[str], fkey_start: int, fkey_end: int, count: int) -> List[Tuple[int, str, int]]:
+    products = []
+    for pkey in range(1, count+1):
+        # 10 random words per description (random.sample() samples w/o replacement)
+        description = " ".join([words[index] for index in random.sample(range(1000), 10)])
+        # brand_id is randomly selected from an integer range
+        brand_id = random.randint(fkey_start, fkey_end)  # closed
+        # Each product is a tuple(str, int)
+        products.append((pkey, description, brand_id))
+    return products
+
+async def insert_products(connection) -> None:
+    # product_id SERIAL PRIMARY KEY,
+    # product_name TEXT NOT NULL,
+    # brand_id INT NOT NULL,   FKEY 
+    words = load_common_words()
+    brand_id_start = 1 
+    brand_id_end = 100
+    product_count = 1000
+    tuples = generate_products(words, brand_id_start, brand_id_end, product_count)
+    sql = "INSERT INTO product VALUES($1, $2, $3)"
+    await connection.executemany(sql, tuples)  
+
+def generate_skus(fkey_start: int, fkey_end: int, count: int) -> List[Tuple[int, int, int, int]]:
+    skus = []
+    for pkey in range(1, count+1):
+        # create random integers from a range
+        product_id = random.randint(fkey_start, fkey_end)  # random.randint is closed, np.random.randint is half-open?
+        size_id = random.randint(1, 3)  # 1-3 from SIZE_INSERT
+        color_id = random.randint(1, 2) # 1-2 from COLOR_INSERT
+        skus.append((pkey, product_id, size_id, color_id))
+    return skus
+
+async def insert_skus(connection) -> None:
+    # sku_id SERIAL PRIMARY KEY,
+    # product_id INT NOT NULL,       # FKEY
+    # product_size_id INT NOT NULL,  # FKEY
+    # product_color_id INT NOT NULL, # FKEY
+    product_id_start = 1
+    product_id_end = 1000
+    sku_count = 100000
+    tuples =  generate_skus(product_id_start, product_id_end, sku_count)
+    sql = "INSERT INTO sku VALUES($1, $2, $3, $4)"
+    await connection.executemany(sql, tuples) 
+
+async def truncate_tables(connection) -> None:
+    await connection.execute("TRUNCATE TABLE brand CASCADE; TRUNCATE TABLE product CASCADE; TRUNCATE TABLE sku CASCADE")
 
 async def main():
     dsn = dsns['pg']
@@ -133,12 +186,16 @@ async def main():
     # for brand in results:
     #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
     
-    ## Insert a bunch of brands using executemany()
-    # await insert_brands(connection)
-
-
-
-
+    # Populate tables
+    random.seed(42)
+    print("Truncate tables")
+    await truncate_tables(connection)
+    print("Load brands")
+    await insert_brands(connection)
+    print("Load products")
+    await insert_products(connection)
+    print("Load skus")
+    await insert_skus(connection)    
 
     await connection.close()
 
