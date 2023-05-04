@@ -7,6 +7,8 @@ from asyncpg import Record
 from typing import List, Tuple, Union
 import random
 
+from util import async_timed
+
 
 CREATE_BRAND_TABLE = \
     """
@@ -199,8 +201,8 @@ async def initialize_tables(dsn):
 
     await connection.close()
 
-async def query_product(pool):
-    product_query = \
+def product_query_1() -> str:
+    qry = \
         """
         SELECT
         p.product_id,
@@ -215,28 +217,44 @@ async def query_product(pool):
         JOIN product_size as ps on ps.product_size_id = s.product_size_id
         WHERE p.product_id = 100
         """
-        
+    return qry
+
+async def query_product(qry, pool):
     async with pool.acquire() as connection:
-        return await connection.fetchrow(product_query)
+        rsp = await connection.fetchrow(qry)
+        print(rsp)
+        return rsp
 
 
+@async_timed()
+async def query_products_synchronously(pool, queries):
+    return [await query_product(pool) for _ in range(queries)]
 
+@async_timed()
+async def query_products_concurrently(pool, queries):
+    queries = [query_product(pool) for _ in range(queries)]
+    return await asyncio.gather(*queries)
 
 async def main():
     dsn = dsns['pg']
 
-    -- await initialize_tables(dsn)
+    #  await initialize_tables(dsn)
 
-
+    # sqlalchemy.engine is also a connection pool
     async with asyncpg.create_pool(dsn=dsn, min_size=6, max_size=6) as pool:
-        pass
+        # qry = product_query_1()
+        # await asyncio.gather(
+        #     query_product(qry, pool),
+        #     query_product(qry, pool),
+        # )
 
-    
-
-    await query_product(pool) 
+        await query_products_synchronously(pool, 10000)
+        await query_products_concurrently(pool, 10000)
     
 
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
