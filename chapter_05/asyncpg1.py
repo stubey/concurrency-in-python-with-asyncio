@@ -100,7 +100,6 @@ async def init_db(connection):
         print(status)
     print('Finished creating the product database!')
 
-
 def load_common_words() -> List[str]:
         with open('common_words.txt') as f:
             words = []
@@ -114,25 +113,30 @@ def generate_brand_names(words: List[str]) -> List[Tuple[Union[str, ]]]:
 
 async def insert_brands(connection) -> int:
     common_words = load_common_words()    
-    brands = generate_brand_names(common_words)
-    insert_brands = "INSERT INTO brand VALUES(DEFAULT, $1)"
-    return await connection.executemany(insert_brands, brands)
+    value_tuples = generate_brand_names(common_words)
+    insert_brands_sql = "INSERT INTO brand VALUES(DEFAULT, $1)"
+    return await connection.executemany(insert_brands_sql, value_tuples)
 
 
 async def main():
     dsn = dsns['pg']
     connection = await asyncpg.connect(dsn)
 
+    ## Create tables using execute()
     #  await init_db(connection)
 
+    ## Insert a few rows and readback using execute() and fetch()/fetchone()
     # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
     # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
     # brand_query = 'SELECT brand_id, brand_name FROM brand'
-    # results: List[Record] = await connection.fetch(brand_query)
+    # results: List[Record] = await connection.fetch(brand_query)  # fetchone
     # for brand in results:
     #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
     
-    await insert_brands(connection)
+    ## Insert a bunch of brands using executemany()
+    # await insert_brands(connection)
+
+
 
 
 
