@@ -4,7 +4,9 @@ import os
 import asyncpg
 import asyncio
 from asyncpg import Record
-from typing import List
+from typing import List, Tuple, Union
+import random
+
 
 CREATE_BRAND_TABLE = \
     """
@@ -78,10 +80,7 @@ dsns = {
   }
 
 
-async def init_db():
-    dsn = dsns['pg']
-    connection = await asyncpg.connect(dsn)
-    
+async def init_db(connection):
     version = connection.get_server_version()
     print(f'Connected! Postgres version is {version}')
 
@@ -101,20 +100,42 @@ async def init_db():
         print(status)
     print('Finished creating the product database!')
 
-    await connection.close()
+
+def load_common_words() -> List[str]:
+        with open('common_words.txt') as f:
+            words = []
+            for l in f.readlines():
+                words.append(l.strip())
+            return words
+
+
+def generate_brand_names(words: List[str]) -> List[Tuple[Union[str, ]]]:
+    return [(words[index],) for index in random.sample(range(100), 100)]
+
+async def insert_brands(connection) -> int:
+    common_words = load_common_words()    
+    brands = generate_brand_names(common_words)
+    insert_brands = "INSERT INTO brand VALUES(DEFAULT, $1)"
+    return await connection.executemany(insert_brands, brands)
+
 
 async def main():
     dsn = dsns['pg']
     connection = await asyncpg.connect(dsn)
 
-    await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
-    await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
+    #  await init_db(connection)
 
-    brand_query = 'SELECT brand_id, brand_name FROM brand'
-    results: List[Record] = await connection.fetch(brand_query)
-    for brand in results:
-        print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
+    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
+    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
+    # brand_query = 'SELECT brand_id, brand_name FROM brand'
+    # results: List[Record] = await connection.fetch(brand_query)
+    # for brand in results:
+    #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
     
+    await insert_brands(connection)
+
+
+
     await connection.close()
 
 
