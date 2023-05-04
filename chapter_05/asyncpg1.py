@@ -172,6 +172,14 @@ async def truncate_tables(connection) -> None:
     await connection.execute("TRUNCATE TABLE brand CASCADE; TRUNCATE TABLE product CASCADE; TRUNCATE TABLE sku CASCADE")
 
 async def initialize_tables(dsn):
+    ## Insert a few rows and readback using execute() and fetch()/fetchone()
+    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
+    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
+    # brand_query = 'SELECT brand_id, brand_name FROM brand'
+    # results: List[Record] = await connection.fetch(brand_query)  # fetchone
+    # for brand in results:
+    #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
+
     connection = await asyncpg.connect(dsn)
 
     ## Create tables using execute()
@@ -191,22 +199,41 @@ async def initialize_tables(dsn):
 
     await connection.close()
 
+async def query_product(pool):
+    product_query = \
+        """
+        SELECT
+        p.product_id,
+        p.product_name,
+        p.brand_id,
+        s.sku_id,
+        pc.product_color_name,
+        ps.product_size_name
+        FROM product as p
+        JOIN sku as s on s.product_id = p.product_id    
+        JOIN product_color as pc on pc.product_color_id = s.product_color_id
+        JOIN product_size as ps on ps.product_size_id = s.product_size_id
+        WHERE p.product_id = 100
+        """
+        
+    async with pool.acquire() as connection:
+        return await connection.fetchrow(product_query)
+
+
+
 
 async def main():
     dsn = dsns['pg']
 
-
-    await initialize_tables(dsn)
-
+    -- await initialize_tables(dsn)
 
 
-    ## Insert a few rows and readback using execute() and fetch()/fetchone()
-    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
-    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
-    # brand_query = 'SELECT brand_id, brand_name FROM brand'
-    # results: List[Record] = await connection.fetch(brand_query)  # fetchone
-    # for brand in results:
-    #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
+    async with asyncpg.create_pool(dsn=dsn, min_size=6, max_size=6) as pool:
+        pass
+
+    
+
+    await query_product(pool) 
     
 
 
