@@ -171,22 +171,14 @@ async def insert_skus(connection) -> None:
 async def truncate_tables(connection) -> None:
     await connection.execute("TRUNCATE TABLE brand CASCADE; TRUNCATE TABLE product CASCADE; TRUNCATE TABLE sku CASCADE")
 
-async def main():
-    dsn = dsns['pg']
+async def initialize_tables(dsn):
     connection = await asyncpg.connect(dsn)
 
     ## Create tables using execute()
     #  await init_db(connection)
 
-    ## Insert a few rows and readback using execute() and fetch()/fetchone()
-    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
-    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
-    # brand_query = 'SELECT brand_id, brand_name FROM brand'
-    # results: List[Record] = await connection.fetch(brand_query)  # fetchone
-    # for brand in results:
-    #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
-    
     # Populate tables
+    print("Populate tables")    
     random.seed(42)
     print("Truncate tables")
     await truncate_tables(connection)
@@ -198,6 +190,24 @@ async def main():
     await insert_skus(connection)    
 
     await connection.close()
+
+
+async def main():
+    dsn = dsns['pg']
+
+
+    await initialize_tables(dsn)
+
+
+
+    ## Insert a few rows and readback using execute() and fetch()/fetchone()
+    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
+    # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
+    # brand_query = 'SELECT brand_id, brand_name FROM brand'
+    # results: List[Record] = await connection.fetch(brand_query)  # fetchone
+    # for brand in results:
+    #     print(f'id: {brand["brand_id"]}, name: {brand["brand_name"]}')
+    
 
 
 
