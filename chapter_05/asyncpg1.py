@@ -7,7 +7,7 @@ from asyncpg import Record
 from typing import List, Tuple, Union
 import random
 
-from util import async_timed
+from async_timer import async_timed
 
 
 CREATE_BRAND_TABLE = \
