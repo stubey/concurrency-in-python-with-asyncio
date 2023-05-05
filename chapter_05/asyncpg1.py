@@ -3,8 +3,7 @@
 import os
 import asyncpg
 import asyncio
-from asyncpg import Record
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Any, Optional
 import random
 
 from async_timer import async_timed
@@ -12,6 +11,7 @@ from async_timer import async_timed
 
 CREATE_BRAND_TABLE = \
     """
+    DROP TABLE IF EXISTS brand CASCADE;
     CREATE TABLE IF NOT EXISTS brand(
     brand_id SERIAL PRIMARY KEY,
     brand_name TEXT NOT NULL
@@ -19,6 +19,7 @@ CREATE_BRAND_TABLE = \
 
 CREATE_PRODUCT_TABLE = \
     """
+    DROP TABLE IF EXISTS product CASCADE;    
     CREATE TABLE IF NOT EXISTS product(
     product_id SERIAL PRIMARY KEY,
     product_name TEXT NOT NULL,
@@ -28,6 +29,7 @@ CREATE_PRODUCT_TABLE = \
 
 CREATE_PRODUCT_COLOR_TABLE = \
     """
+    DROP TABLE IF EXISTS product_color CASCADE;       
     CREATE TABLE IF NOT EXISTS product_color(
     product_color_id SERIAL PRIMARY KEY,
     product_color_name TEXT NOT NULL
@@ -35,6 +37,7 @@ CREATE_PRODUCT_COLOR_TABLE = \
 
 CREATE_PRODUCT_SIZE_TABLE = \
     """
+    DROP TABLE IF EXISTS product_size CASCADE;       
     CREATE TABLE IF NOT EXISTS product_size(
     product_size_id SERIAL PRIMARY KEY,
     product_size_name TEXT NOT NULL
@@ -42,6 +45,7 @@ CREATE_PRODUCT_SIZE_TABLE = \
 
 CREATE_SKU_TABLE = \
     """
+    DROP TABLE IF EXISTS sku CASCADE;       
     CREATE TABLE IF NOT EXISTS sku(
     sku_id SERIAL PRIMARY KEY,
     product_id INT NOT NULL,
@@ -78,7 +82,8 @@ dsns = {
   'pg': f'postgresql://tom@localhost:6000/products',
   }
 
-
+# Drop and create tables
+# load product_color and product_size tables
 async def init_db(connection):
     version = connection.get_server_version()
     print(f'Connected! Postgres version is {version}')
@@ -106,7 +111,7 @@ def load_common_words() -> List[str]:
                 words.append(l.strip())
             return words
 
-def generate_brand_names(words: List[str], id_start: int, id_end: int) -> List[Tuple[Union[str, int]]]:
+def generate_brand_names(words: List[str], id_start: int, id_end: int) -> List[Tuple[int, str]]:
     # return [(words[index],) for index in random.sample(range(id_start, id_end+1), count)]
     brands = []
     for pkey in range(id_start, id_end+1):
@@ -173,7 +178,8 @@ async def insert_skus(connection) -> None:
 async def truncate_tables(connection) -> None:
     await connection.execute("TRUNCATE TABLE brand CASCADE; TRUNCATE TABLE product CASCADE; TRUNCATE TABLE sku CASCADE")
 
-async def initialize_tables(dsn):
+# Truncate and load tables
+async def initialize_tables(dsn, create_tables):
     ## Insert a few rows and readback using execute() and fetch()/fetchone()
     # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Levis')")
     # await connection.execute("INSERT INTO brand VALUES(DEFAULT, 'Seven')")
@@ -185,7 +191,8 @@ async def initialize_tables(dsn):
     connection = await asyncpg.connect(dsn)
 
     ## Create tables using execute()
-    #  await init_db(connection)
+    if create_tables:
+        await init_db(connection)
 
     # Populate tables
     print("Populate tables")    
@@ -219,40 +226,42 @@ def product_query_1() -> str:
         """
     return qry
 
-async def query_product(qry, pool):
+async def query_product(qry:str, pool: asyncpg.pool.Pool) -> Optional[asyncpg.Record]:
     async with pool.acquire() as connection:
         rsp = await connection.fetchrow(qry)
-        print(rsp)
         return rsp
 
+@async_timed()
+async def query_products_synchronously(qry: str, count: int, pool: asyncpg.pool.Pool) -> List[Optional[asyncpg.Record]]:
+    return [await query_product(qry, pool) for _ in range(count)]
 
 @async_timed()
-async def query_products_synchronously(pool, queries):
-    return [await query_product(pool) for _ in range(queries)]
-
-@async_timed()
-async def query_products_concurrently(pool, queries):
-    queries = [query_product(pool) for _ in range(queries)]
+async def query_products_concurrently(qry: str, count: int, pool :asyncpg.pool.Pool) -> asyncio.Future[Any]:
+    queries = [query_product(qry, pool) for _ in range(count)]
     return await asyncio.gather(*queries)
+
+async def run_two_concurrent_queries(qry1, qry2, pool):
+    # Run concurrently, return when all queries complete (vs. as_completed)
+    await asyncio.gather(
+        query_product(qry1, pool),
+        query_product(qry2, pool),
+    )
 
 async def main():
     dsn = dsns['pg']
 
-    #  await initialize_tables(dsn)
+    # Create, truncate and load tables
+    # await initialize_tables(dsn, create_tables=True)
 
-    # sqlalchemy.engine is also a connection pool
+    # sqlalchemy.engine is a connection pool
     async with asyncpg.create_pool(dsn=dsn, min_size=6, max_size=6) as pool:
-        # qry = product_query_1()
-        # await asyncio.gather(
-        #     query_product(qry, pool),
-        #     query_product(qry, pool),
-        # )
+        qry = product_query_1()
 
-        await query_products_synchronously(pool, 10000)
-        await query_products_concurrently(pool, 10000)
+        # run_two_concurrent_queries(qry, qry, pool)
+
+        await query_products_synchronously(qry, 10000, pool)
+        await query_products_concurrently(qry, 10000, pool)
     
-
-
 
 if __name__ == "__main__":
     asyncio.run(main())
